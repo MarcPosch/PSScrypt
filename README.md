@@ -90,13 +90,14 @@ $key = Invoke-Scrypt -Password ([byte[]]@()) -Salt ([byte[]]@()) `
 
 ## Tests
 
-The test suite checks the module against the official RFC 7914 §12 test vectors, return type and parameter validation:
+The test suite is written for [Pester](https://pester.dev) 5 (`Install-Module Pester -Scope CurrentUser`). It checks the module against the official RFC 7914 §12 test vectors, return type and parameter validation:
 
 ```powershell
-pwsh -File ./PSScrypt.Tests.ps1
+Invoke-Pester -Path ./PSScrypt.Tests.ps1 -Output Detailed
 
 # also run vector #4 (N=1048576, needs ~1 GiB RAM)
-pwsh -File ./PSScrypt.Tests.ps1 -IncludeLargeVector
+$env:PSSCRYPT_LARGE_VECTOR = 1
+Invoke-Pester -Path ./PSScrypt.Tests.ps1 -Output Detailed
 ```
 
 ## License
