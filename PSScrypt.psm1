@@ -3,7 +3,7 @@ Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
 <#
-    PSScrypt — a pure-PowerShell implementation of scrypt (RFC 7914).
+    PSScrypt — a self-contained implementation of scrypt (RFC 7914)
 
     PowerShell 7 ships no native scrypt and the .NET base class library does
     not expose one, so the memory-hard core is implemented here in self-contained
@@ -28,6 +28,7 @@ $ErrorActionPreference = 'Stop'
 # ---------------------------------------------------------------------------
 $script:PSScryptCSharp = @'
 using System;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 
 public static class PSScryptCore {
@@ -37,6 +38,20 @@ public static class PSScryptCore {
     /// N must be a power of two greater than 1; r, p, dkLen must be positive.
     /// </summary>
     public static byte[] Scrypt(byte[] password, byte[] salt, int N, int r, int p, int dkLen) {
+        if (password == null) throw new ArgumentNullException("password");
+        if (salt == null) throw new ArgumentNullException("salt");
+        if (N <= 1 || (N & (N - 1)) != 0)
+            throw new ArgumentException("N must be a power of two greater than 1.", "N");
+        if (r < 1) throw new ArgumentOutOfRangeException("r", "r must be >= 1.");
+        if (p < 1) throw new ArgumentOutOfRangeException("p", "p must be >= 1.");
+        if (dkLen < 1) throw new ArgumentOutOfRangeException("dkLen", "dkLen must be >= 1.");
+        // RFC 7914: p * r < 2^30. The p * 128 * r byte working array must also
+        // fit in a single .NET array (just under 2 GiB).
+        if ((long)p * r >= (1L << 30))
+            throw new ArgumentException("p * r must be less than 2^30.");
+        if ((long)p * r * 128 > 0x7FFFFFC7L)
+            throw new ArgumentException("p * r is too large: p * 128 * r bytes exceeds the maximum array size.");
+
         int blockSize = 128 * r;
         byte[] B = PBKDF2_SHA256(password, salt, 1, p * blockSize);
         for (int i = 0; i < p; i++) {
@@ -56,7 +71,7 @@ public static class PSScryptCore {
     // -----------------------------------------------------------------------
     private static byte[] PBKDF2_SHA256(byte[] password, byte[] salt, int iterations, int dkLen) {
         const int hashLen = 32; // SHA-256 output bytes
-        int numBlocks = (dkLen + hashLen - 1) / hashLen;
+        int numBlocks = (int)(((long)dkLen + hashLen - 1) / hashLen);
         byte[] result = new byte[dkLen];
         using var prf = new HMACSHA256(password);
         for (int blockNum = 1; blockNum <= numBlocks; blockNum++) {
@@ -73,9 +88,12 @@ public static class PSScryptCore {
                 U = prf.ComputeHash(U);
                 for (int j = 0; j < hashLen; j++) T[j] ^= U[j];
             }
-            int offset  = (blockNum - 1) * hashLen;
+            int offset  = (int)((long)(blockNum - 1) * hashLen);
             int copyLen = Math.Min(hashLen, dkLen - offset);
             Buffer.BlockCopy(T, 0, result, offset, copyLen);
+            Array.Clear(saltBlock, 0, saltBlock.Length);
+            Array.Clear(U, 0, U.Length);
+            Array.Clear(T, 0, T.Length);
         }
         return result;
     }
@@ -111,6 +129,7 @@ public static class PSScryptCore {
             QR(x, 15, 12, 13, 14);
         }
         for (int i = 0; i < 16; i++) B[i] += x[i];
+        Array.Clear(x, 0, x.Length);
     }
 
     // -----------------------------------------------------------------------
@@ -132,6 +151,8 @@ public static class PSScryptCore {
             Buffer.BlockCopy(Y,  (2 * i)      * 64, B,  i      * 64, 64);
             Buffer.BlockCopy(Y, ((2 * i) + 1) * 64, B, (i + r) * 64, 64);
         }
+        Array.Clear(X, 0, X.Length);
+        Array.Clear(Y, 0, Y.Length);
     }
 
     // -----------------------------------------------------------------------
@@ -142,7 +163,7 @@ public static class PSScryptCore {
         uint[] X = new uint[wordCount];
         // Decode little-endian bytes to uint[]
         for (int i = 0; i < wordCount; i++)
-            X[i] = BitConverter.ToUInt32(block, i * 4);
+            X[i] = BinaryPrimitives.ReadUInt32LittleEndian(new ReadOnlySpan<byte>(block, i * 4, 4));
         // Fill lookup table V
         uint[][] V = new uint[N][];
         for (int i = 0; i < N; i++) {
@@ -156,11 +177,10 @@ public static class PSScryptCore {
             BlockMix(X, r);
         }
         // Encode back to little-endian bytes
-        for (int i = 0; i < wordCount; i++) {
-            byte[] b = BitConverter.GetBytes(X[i]);
-            Buffer.BlockCopy(b, 0, block, i * 4, 4);
-        }
+        for (int i = 0; i < wordCount; i++)
+            BinaryPrimitives.WriteUInt32LittleEndian(new Span<byte>(block, i * 4, 4), X[i]);
         Array.Clear(X, 0, X.Length);
+        for (int i = 0; i < N; i++) Array.Clear(V[i], 0, V[i].Length);
     }
 }
 '@
@@ -259,7 +279,9 @@ function Invoke-Scrypt {
             "CostFactor (N) must be a power of two greater than 1; got $CostFactor.", 'CostFactor')
     }
 
-    return [PSScryptCore]::Scrypt($Password, $Salt, $CostFactor, $BlockSize, $Parallelization, $DerivedKeyLength)
+    # Unary comma stops PowerShell unrolling the array into the pipeline (and
+    # collapsing a 1-byte result into a bare [byte]).
+    return ,[PSScryptCore]::Scrypt($Password, $Salt, $CostFactor, $BlockSize, $Parallelization, $DerivedKeyLength)
 }
 
 Export-ModuleMember -Function 'Invoke-Scrypt'

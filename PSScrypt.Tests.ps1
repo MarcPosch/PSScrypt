@@ -14,10 +14,10 @@
     by default. Pass -IncludeLargeVector to run it.
 
 .EXAMPLE
-    pwsh -File Scrypt/PSScrypt.Tests.ps1
+    pwsh -File PSScrypt.Tests.ps1
 
 .EXAMPLE
-    pwsh -File Scrypt/PSScrypt.Tests.ps1 -IncludeLargeVector
+    pwsh -File PSScrypt.Tests.ps1 -IncludeLargeVector
 #>
 [CmdletBinding()]
 param(
@@ -97,6 +97,30 @@ try {
 }
 catch {
     $pass++; Write-Host '  PASS            rejects non-power-of-two CostFactor' -ForegroundColor Green
+}
+
+# Return type: must be byte[] without a caller-side cast, even for 1 byte
+foreach ($len in 1, 32) {
+    $k = Invoke-Scrypt -Password ([byte[]]@(1)) -Salt ([byte[]]@(1)) -N 16 -R 1 -P 1 -DkLen $len
+    if ($k -is [byte[]] -and $k.Length -eq $len) {
+        $pass++; Write-Host "  PASS            returns [byte[]] for DkLen=$len" -ForegroundColor Green
+    }
+    else {
+        $fail++; Write-Host "  FAIL            returns [byte[]] for DkLen=$len (got $($k.GetType().FullName))" -ForegroundColor Red
+    }
+}
+
+# Oversized parameters must give a clear ArgumentException, not an overflow
+foreach ($case in @{ R = 16777216; P = 1 }, @{ R = 8; P = 2097152 }, @{ R = 1073741824; P = 1 }) {
+    try {
+        [void](Invoke-Scrypt -Password ([byte[]]@(1)) -Salt ([byte[]]@(1)) -N 16 -R $case.R -P $case.P -DkLen 16)
+        $fail++; Write-Host "  FAIL            rejects r=$($case.R) p=$($case.P)" -ForegroundColor Red
+    }
+    catch {
+        $ex = $_.Exception.InnerException ?? $_.Exception
+        if ($ex -is [ArgumentException]) { $pass++; Write-Host "  PASS            rejects r=$($case.R) p=$($case.P)" -ForegroundColor Green }
+        else { $fail++; Write-Host "  FAIL            r=$($case.R) p=$($case.P) threw $($ex.GetType().Name)" -ForegroundColor Red }
+    }
 }
 
 Write-Host ('=' * 52)
