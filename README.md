@@ -109,4 +109,4 @@ I needed a powershell-only implementation of scrypt without external dependencie
 Since I did not find any, I decided to create one.
 
 Credit, where credit is due:
-Without AI, this would not have been possible in reasonable time using my spare time only.
+Without AI, this would not have been possible in a reasonable timeframe using my spare time only.
