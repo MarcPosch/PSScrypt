@@ -103,7 +103,7 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        # ReleaseNotes = ''
+        ReleaseNotes = 'https://github.com/MarcPosch/PSScrypt/blob/main/RELEASENOTES.md'
 
         # Prerelease string of this module
         # Prerelease = ''
