@@ -23,7 +23,7 @@ GUID = '7f657883-8a29-449c-98cf-6afef516286b'
 Author = 'Marc Posch'
 
 # Copyright statement for this module
-Copyright = '(c) Marc Posch. All rights reserved.'
+Copyright = 'Copyright (c) 2026 Marc Posch.'
 
 # Description of the functionality provided by this module
 Description = 'Scrypt (RFC 7914) key derivation for PowerShell 7, implemented with inline C# and no external dependencies.'
