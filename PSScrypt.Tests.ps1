@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 <#
 .SYNOPSIS
@@ -48,6 +48,8 @@ BeforeAll {
     Import-Module (Join-Path $PSScriptRoot 'PSScrypt.psm1') -Force
 
     function Get-ScryptHex {
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Password',
+            Justification = 'Public RFC 7914 test vectors, not secrets.')]
         param([string]$Password, [string]$Salt, [int]$N, [int]$R, [int]$P, [int]$DkLen)
         [byte[]]$key = Invoke-Scrypt -Password ([Text.Encoding]::ASCII.GetBytes($Password)) `
             -Salt ([Text.Encoding]::ASCII.GetBytes($Salt)) -N $N -R $R -P $P -DkLen $DkLen

@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
@@ -242,6 +242,8 @@ if (-not ('PSScryptCore' -as [type])) {
 function Invoke-Scrypt {
     [CmdletBinding()]
     [OutputType([byte[]])]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseOutputTypeCorrectly', '',
+        Justification = 'The unary comma in the return statement keeps the byte[] from being unrolled; the output is a byte[].')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Password',
         Justification = 'scrypt operates on a raw byte[] secret by design; there is no SecureString form for a KDF input.')]
     param(
